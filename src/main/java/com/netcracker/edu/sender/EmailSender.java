@@ -3,6 +3,7 @@ package com.netcracker.edu.sender;
 import javax.mail.*;
 import javax.mail.internet.InternetAddress;
 import javax.mail.internet.MimeMessage;
+import java.util.List;
 import java.util.Properties;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -29,7 +30,7 @@ public class EmailSender {
         props.put("mail.smtp.auth", "true");
     }
 
-    public void sendMessage(String email, String message) {
+    public void sendMessage(List<Person> persons) {
         Session session = Session.getDefaultInstance(props, new Authenticator() {
             @Override
             protected PasswordAuthentication getPasswordAuthentication() {
@@ -37,16 +38,22 @@ public class EmailSender {
             }
         });
 
-        try {
-            MimeMessage mimeMessage = new MimeMessage(session);
-            mimeMessage.setFrom(new InternetAddress(EMAIL_FROM));
-            mimeMessage.setRecipients(Message.RecipientType.TO, InternetAddress.parse(email));
-            mimeMessage.setSubject(SUBJECT);
-            mimeMessage.setText(message);
+        for (Person p : persons) {
+            StringBuilder msg = new StringBuilder("Hello, ! It's a test message, don't respond. Have a nice day!");
+            int placeForName = 7;
+            msg.insert(placeForName, p.getName()); // add name between comma and exclamation mark from file
+            try {
+                MimeMessage mimeMessage = new MimeMessage(session);
+                mimeMessage.setFrom(new InternetAddress(EMAIL_FROM));
+                mimeMessage.setRecipients(Message.RecipientType.TO, InternetAddress.parse(p.getEmail()));
+                mimeMessage.setSubject(SUBJECT);
+                mimeMessage.setText(String.valueOf(msg));
 
-            Transport.send(mimeMessage);
-        } catch (MessagingException e) {
-            log.error("Message sending failed");
+                Transport.send(mimeMessage);
+
+            } catch (MessagingException e) {
+                log.error("Message sending failed");
+            }
         }
     }
 }
