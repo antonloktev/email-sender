@@ -3,6 +3,7 @@ package com.netcracker.edu.sender;
 import javax.mail.*;
 import javax.mail.internet.InternetAddress;
 import javax.mail.internet.MimeMessage;
+import java.sql.*;
 import java.util.List;
 import java.util.Properties;
 import org.slf4j.Logger;
@@ -30,6 +31,26 @@ public class EmailSender {
         props.put("mail.smtp.auth", "true");
     }
 
+    private void saveToDB(Person p) {
+        String url = "jdbc:oracle:thin:@localhost:1521:XE";
+        String username = "parser";
+        String password = "1234";
+        try (Connection conn = DriverManager.getConnection(url, username, password)){
+            PreparedStatement stmnt;
+
+            String insertSql = "insert into emails(id, name, email, date_value)" +
+                    "values (emails_id_increment.nextval, ?, ?, sysdate)";
+
+            stmnt = conn.prepareStatement(insertSql);
+            stmnt.setString(1, p.getName());
+            stmnt.setString(2, p.getEmail());
+            stmnt.executeUpdate();
+        } catch (SQLException e) {
+            log.error("Error while saving user " + p, e);
+        }
+
+    }
+
     public void sendMessage(List<Person> persons) {
         Session session = Session.getDefaultInstance(props, new Authenticator() {
             @Override
@@ -50,6 +71,10 @@ public class EmailSender {
                 mimeMessage.setText(String.valueOf(msg));
 
                 Transport.send(mimeMessage);
+                log.info("Message to address -> " + p.getEmail() + " <- successfully sent");
+
+                saveToDB(p);
+                log.info("User " + p + " saved");
 
             } catch (MessagingException e) {
                 log.error("Message sending failed");
