@@ -38,13 +38,22 @@ public class EmailSender {
         try (Connection conn = DriverManager.getConnection(url, username, password)){
             PreparedStatement stmnt;
 
-            String insertSql = "insert into emails(id, name, email, date_value)" +
-                    "values (emails_id_increment.nextval, ?, ?, sysdate)";
+            // update time, if the user is already in the DB
+            String sql = "MERGE INTO EMAILS\n" +
+                    "USING DUAL ON ( name = ? AND email = ?)\n" +
+                    "WHEN MATCHED THEN UPDATE SET date_value = sysdate\n" +
+                    "WHEN NOT MATCHED THEN INSERT VALUES (EMAILS_ID_INCREMENT.nextval,?,?,sysdate)\n";
 
-            stmnt = conn.prepareStatement(insertSql);
+            stmnt = conn.prepareStatement(sql);
+            // in case of updating
             stmnt.setString(1, p.getName());
             stmnt.setString(2, p.getEmail());
-            stmnt.executeUpdate();
+            // in case of inserting
+            stmnt.setString(3, p.getName());
+            stmnt.setString(4, p.getEmail());
+
+        stmnt.executeUpdate();
+
         } catch (SQLException e) {
             log.error("Error while saving user " + p, e);
         }
