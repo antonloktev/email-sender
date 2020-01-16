@@ -1,8 +1,11 @@
 package com.netcracker.edu.sender;
 
+import java.util.Date;
+
 public class Person {
     private String name;
     private String email;
+    private Date lastMessageDate;
 
     public String getName() {
         return name;
@@ -18,6 +21,14 @@ public class Person {
 
     public void setEmail(String email) {
         this.email = email;
+    }
+
+    public Date getLastMessageDate() {
+        return lastMessageDate;
+    }
+
+    public void setLastMessageDate(Date lastMessageDate) {
+        this.lastMessageDate = lastMessageDate;
     }
 
     @Override

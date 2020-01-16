@@ -4,11 +4,14 @@ import javax.mail.*;
 import javax.mail.internet.InternetAddress;
 import javax.mail.internet.MimeMessage;
 import java.sql.*;
+import java.util.ArrayList;
+import java.util.Calendar;
 import java.util.List;
 import java.util.Properties;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
+import java.util.Date;
 
 
 @Service
@@ -18,6 +21,10 @@ public class EmailSender {
     private final String EMAIL_FROM = "xxx@gmail.com";  // change accordingly
     private final String PASSWORD = "admin";  //change accordingly
     private final String SUBJECT = "Greeting! \uD83D\uDE03";
+
+    private final String ORACLE_URL = "jdbc:oracle:thin:@localhost:1521:XE";
+    private final String ORACLE_USER = "parser";
+    private final String ORACLE_PASS = "1234";
 
     private Properties props;
 
@@ -32,10 +39,7 @@ public class EmailSender {
     }
 
     private void saveToDB(Person p) {
-        String url = "jdbc:oracle:thin:@localhost:1521:XE";
-        String username = "parser";
-        String password = "1234";
-        try (Connection conn = DriverManager.getConnection(url, username, password)){
+        try (Connection conn = DriverManager.getConnection(ORACLE_URL, ORACLE_USER, ORACLE_PASS)){
             PreparedStatement stmnt;
 
             // update time, if the user is already in the DB
@@ -52,13 +56,67 @@ public class EmailSender {
             stmnt.setString(3, p.getName());
             stmnt.setString(4, p.getEmail());
 
-        stmnt.executeUpdate();
+            stmnt.executeUpdate();
 
         } catch (SQLException e) {
             log.error("Error while saving user " + p, e);
         }
 
     }
+
+    public List<Person> getAll(){
+        String sql = "select * from emails";
+
+        List persons = new ArrayList<Person>();
+
+        try {
+            PreparedStatement stmnt;
+            stmnt = DriverManager.getConnection(ORACLE_URL, ORACLE_USER, ORACLE_PASS).prepareStatement(sql);
+            ResultSet rs = stmnt.executeQuery();
+            while(rs.next()) {
+                Person p = new Person();
+                p.setName(rs.getString("name"));
+                p.setEmail(rs.getString("email"));
+                p.setLastMessageDate(rs.getTimestamp("date_value"));
+                persons.add(p);
+            }
+        } catch (SQLException e) {
+            log.error("Error during select query", e);
+        }
+        return persons;
+    }
+
+    // calculating time from DB plus timeout
+    public Timestamp getEndOfTimeout(Person p, int timeout) {
+        Calendar cal = Calendar.getInstance();
+        cal.setTimeInMillis(p.getLastMessageDate().getTime());
+        cal.add(Calendar.SECOND, timeout);
+        return new Timestamp(cal.getTime().getTime());
+    }
+
+    public Timestamp getCurrentTime() {
+        Date date = new Date();
+        long time = date.getTime();
+        return new Timestamp(time);
+    }
+
+    // send message to all users from DB considering timeout
+    public void sendToAllFromDB(int timeout) {
+        List<Person> persons = getAll();
+        List<Person> filtered = new ArrayList<>();
+        for (Person p : persons) {
+            Timestamp requiredTime = getEndOfTimeout(p, timeout);
+            Timestamp currentTime = getCurrentTime();
+            // last time of message plus timeout less than current time, so we can send message again
+            if (requiredTime.before(currentTime)) {
+                filtered.add(p);
+            } else {
+                log.info("Timeout for " + p.getEmail() + " is not passed");
+            }
+        }
+        sendMessage(filtered);
+    }
+
 
     public void sendMessage(List<Person> persons) {
         Session session = Session.getDefaultInstance(props, new Authenticator() {
