@@ -12,10 +12,12 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import java.util.Date;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 
 @Service
-public class EmailSender {
+public class EmailSender implements Runnable {
     private static final Logger log = LoggerFactory.getLogger(EmailSender.class);
 
     private final String EMAIL_FROM = "xxx@gmail.com";  // change accordingly
@@ -26,7 +28,13 @@ public class EmailSender {
     private final String ORACLE_USER = "parser";
     private final String ORACLE_PASS = "1234";
 
+    // multithreading parameters
+    private static final int NUMBER_OF_THREADS = 4;
+    private static final int NUMBER_OF_RECORDS_FOR_THREAD = 2;
+
     private Properties props;
+
+    private List<Person> persons;
 
     public EmailSender() {
         props = new Properties();
@@ -36,6 +44,16 @@ public class EmailSender {
         props.put("mail.smtp.ssl.trust", "smtp.gmail.com");
         props.put("mail.smtp.port", "587");
         props.put("mail.smtp.auth", "true");
+    }
+
+    public EmailSender(List<Person> partOfPersons) {
+        this();
+        this.persons = partOfPersons;
+    }
+
+    @Override
+    public void run() {
+        sendMessage(persons);
     }
 
     private void saveToDB(Person p) {
@@ -117,7 +135,6 @@ public class EmailSender {
         sendMessage(filtered);
     }
 
-
     public void sendMessage(List<Person> persons) {
         Session session = Session.getDefaultInstance(props, new Authenticator() {
             @Override
@@ -147,5 +164,30 @@ public class EmailSender {
                 log.error("Message sending failed");
             }
         }
+    }
+
+    // split the list of persons so that each part consists of a given number of records (except maybe the last)
+    public static <Person> List<List<Person>> splitList(List<Person> persons, int quantityInPart) {
+        List<List<Person>> parts = new ArrayList<>();
+
+        for (int i = 0; i < persons.size(); i += quantityInPart) {
+            parts.add(new ArrayList<>(
+                    persons.subList(i, Math.min(persons.size(), i + quantityInPart)))
+            );
+        }
+        return parts;
+    }
+
+    public void sendUsingMultithreading(List<Person> persons) {
+        ExecutorService executor = Executors.newFixedThreadPool(NUMBER_OF_THREADS);
+        log.info("Multithreading sending started. Number of threads: " + NUMBER_OF_THREADS);
+
+        List<List<Person>> parts = splitList(persons, NUMBER_OF_RECORDS_FOR_THREAD);
+
+        for(List<Person> part : parts) {
+            executor.execute(new EmailSender(part));
+        }
+
+        executor.shutdown();
     }
 }
